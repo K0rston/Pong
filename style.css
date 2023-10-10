@@ -1,0 +1,12 @@
+body {
+  align-items: center;
+  background: skyblue;
+  flex-direction: column;
+  display: flex;
+  min-block-size: 100vh;
+  justify-content: start;
+}
+
+.game {
+  border: 1px solid black;
+}

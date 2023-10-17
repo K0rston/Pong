@@ -1,12 +1,23 @@
-async function main() {
-  const canvas = document.getElementById("game");
-
-  if (!(canvas instanceof HTMLCanvasElement)) {
-    return;
+/**
+ * @returns {Generator<number>}
+ */
+async function* animationFrames() {
+  let i = 0;
+  while (true) {
+    yield await new Promise((resolve) => {
+      requestAnimationFrame(() => {
+        resolve(i);
+        i += 1;
+      });
+    });
   }
+}
 
-  const ctx = canvas.getContext("2d");
-
+/**
+ * @param {CanvasRenderingContext2D} ctx
+ * @returns {void}
+ */
+function draw(ctx) {
   // Clear the canvas with a white background
   ctx.fillStyle = "white";
   ctx.rect(0, 0, 500, 500);
@@ -29,6 +40,20 @@ async function main() {
   ctx.fillStyle = "black";
   ctx.rect(320, 465, 80, 15);
   ctx.fill();
+}
+
+async function main() {
+  const canvas = document.getElementById("game");
+
+  if (!(canvas instanceof HTMLCanvasElement)) {
+    return;
+  }
+
+  const ctx = canvas.getContext("2d");
+
+  for await (const frame of animationFrames()) {
+    draw(ctx);
+  }
 }
 
 document.addEventListener("DOMContentLoaded", main);

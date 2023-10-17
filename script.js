@@ -15,9 +15,10 @@ async function* animationFrames() {
 
 /**
  * @param {CanvasRenderingContext2D} ctx
+ * @param {{x: number, y: number}} ball
  * @returns {void}
  */
-function draw(ctx) {
+function draw(ctx, ball) {
   // Clear the canvas with a white background
   ctx.fillStyle = "white";
   ctx.rect(0, 0, 500, 500);
@@ -26,7 +27,7 @@ function draw(ctx) {
   // Ball
   ctx.beginPath();
   ctx.fillStyle = "black";
-  ctx.arc(250, 250, 7.5, 0, 2 * Math.PI);
+  ctx.arc(ball.x, ball.y, 7.5, 0, 2 * Math.PI);
   ctx.fill();
 
   // Paddle 1
@@ -51,8 +52,23 @@ async function main() {
 
   const ctx = canvas.getContext("2d");
 
+  // Create an object to hold the x and y coordinates of the ball.
+  const ball = {
+    x: 250,
+    y: 250,
+  };
+
   for await (const frame of animationFrames()) {
-    draw(ctx);
+    // Draw the ball with the canvas context.
+    draw(ctx, ball);
+
+    // Move the ball down one pixel
+    ball.y += 1;
+
+    // Exit the loop after 200 frames
+    if (frame >= 200) {
+      break;
+    }
   }
 }
 

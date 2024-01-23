@@ -1,12 +1,53 @@
+html,
+body {
+  margin: 0;
+}
+
 body {
   align-items: center;
   background: skyblue;
+  box-sizing: border-box;
   flex-direction: column;
   display: flex;
   min-block-size: 100vh;
-  justify-content: start;
+  min-inline-size: 100vw;
+  justify-content: center;
+  padding: 2em;
+  row-gap: 2em;
+}
+
+.title {
+  display: block;
+  margin: 0;
+  font-size: 3em;
+  text-align: center;
 }
 
 .game {
-  border: 1px solid black;
+  background: white;
+  border: 2px solid black;
+}
+
+.controls {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  row-gap: 0.5ex;
+}
+
+.controls dt {
+  grid-column: 1;
+  justify-self: end;
+}
+
+.controls dd {
+  grid-column: 2;
+}
+
+kbd {
+  background: lightblue;
+  border: 1px solid gray;
+  border-radius: 2px;
+  font-weight: 600;
+  padding-block: 0.2ex;
+  padding-inline: 0.5ex;
 }

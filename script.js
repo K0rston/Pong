@@ -17,13 +17,15 @@
  * @typedef {object} Paddle
  * @prop {Pos} pos - The x, y coordinate of the paddle.
  *
- * @typedef {0 | 1 | null} ServingPaddle - Which paddle—if any—is serving the ball
+ * @typedef {0 | 1 | null} ServingPaddle - Which paddle is serving the ball, if any
+ * @typedef {[number, number]} Score - Keep track of the score
  *
  * @typedef {object} State
  * @prop {Boundaries} boundaries
  * @prop {Ball} ball
  * @prop {[Paddle, Paddle]} paddles
  * @prop {ServingPaddle} servingPaddle
+ * @prop {Score} score
  */
 
 const BALL_RADIUS = 7.5;
@@ -34,6 +36,9 @@ const PADDLE_SPEED = 2;
 
 // How far from the edge the paddle is positioned.
 const PADDLE_OFFSET_Y = 20;
+
+// Lets put the score a little above the paddle.
+const SCORE_MARGIN = PADDLE_OFFSET_Y + PADDLE_HEIGHT + 20;
 
 const ALLOWED_INPUTS = [" ", "a", "d", "ArrowLeft", "ArrowRight"];
 
@@ -60,7 +65,7 @@ function createInputCollector() {
 /**
  * Iterate over all the animation frame, yielding ones per frame.
  *
- * @returns {Generator<number>}
+ * @returns {AsyncGenerator<number>}
  */
 async function* animationFrames() {
   while (true) {
@@ -78,6 +83,10 @@ async function* animationFrames() {
  */
 function createState(canvas) {
   return {
+    // Start a fair game.
+    score: [0, 0],
+
+    // The edges of the playing board.
     boundaries: { xMin: 0, xMax: canvas.width, yMin: 0, yMax: canvas.height },
 
     ball: {
@@ -86,6 +95,7 @@ function createState(canvas) {
       speed: 3,
     },
 
+    // Two paddles, one at top, one at bottom.
     paddles: [
       {
         pos: { x: canvas.width / 2, y: PADDLE_OFFSET_Y },
@@ -95,6 +105,7 @@ function createState(canvas) {
       },
     ],
 
+    // Top paddle starts,
     servingPaddle: 0,
   };
 }
@@ -161,9 +172,10 @@ function updateServingPaddle({ servingPaddle: oldServingPaddle }, inputs) {
  * Return the new state of the ball after calculated all collisions.
  *
  * @param {State} state - The current state
+ * @param {State} oldState - The previous state
  * @returns {Ball} - The new state of the ball
  */
-function updateBall(state) {
+function updateBall(state, oldState) {
   // sin and cos are built in trigonomic functions. You’ll learn about trig
   // functions in an advanced math class. They are super useful for drawing.
   // Basically cos(angle) is how much your x coordinate, changes and sin(angle)
@@ -203,7 +215,7 @@ function updateBall(state) {
     // The ball is not moving, it must have been served in this frame.
     let angle = 0;
 
-    if (state.servingPaddle === 0) {
+    if (oldState.servingPaddle === 0) {
       // Top paddle has it, shoot it downwards (π/2 radians = 90 deg).
       angle = Math.PI / 2;
     } else {
@@ -228,19 +240,6 @@ function updateBall(state) {
   // The new momentum.
   let angle = oldBall.angle;
   let speed = oldBall.speed;
-
-  // See if we hit the top or bottom.
-  // NOTE: This will be removed and replaced with a scoring system
-  if (
-    oldBall.pos.y < state.boundaries.yMin ||
-    oldBall.pos.y > state.boundaries.yMax
-  ) {
-    angle = -oldBall.angle;
-    pos.x = oldBall.pos.x + speed * Math.cos(angle);
-    pos.y = oldBall.pos.y + speed * Math.sin(angle);
-
-    return { pos, angle, speed };
-  }
 
   // See if we hit the paddles.
   for (const paddle of state.paddles) {
@@ -291,6 +290,40 @@ function updateBall(state) {
 }
 
 /**
+ * See if we need to increment the points for either player and put
+ * the ball into a serving position.
+ *
+ * @param {State} state
+ * @returns {{score: Score, newServingPaddle: ServingPaddle}}
+ */
+function updateScore({ ball, boundaries, score }) {
+  // See if we hit the top.
+  if (ball.pos.y - BALL_RADIUS < boundaries.yMin) {
+    return {
+      // Player 2 gets a point.
+      score: [score[0], score[1] + 1],
+      // The ball resets to Player 1 paddle
+      newServingPaddle: 0,
+    };
+  }
+
+  if (ball.pos.y + BALL_RADIUS > boundaries.yMax) {
+    return {
+      // Player 1 gets a point.
+      score: [score[0] + 1, score[1]],
+      // The ball resets to Player 2 paddle
+      newServingPaddle: 1,
+    };
+  }
+
+  // Same score, nothing changes.
+  return {
+    score,
+    newServingPaddle: null,
+  };
+}
+
+/**
  * Update the state of the game. Recalculate all the positions, all momentum,
  * react to interactions, collisions, and user inputs.
  *
@@ -299,9 +332,30 @@ function updateBall(state) {
  * @returns {void}
  */
 function updateState(state, inputs) {
-  state.servingPaddle = updateServingPaddle(state, inputs);
-  state.paddles = updatePaddles(state, inputs);
-  state.ball = updateBall(state);
+  let servingPaddle = updateServingPaddle(state, inputs);
+  const paddles = updatePaddles(state, inputs);
+
+  // We need the updated paddle position to see what happens to the
+  // ball.
+  let ball = updateBall({ ...state, paddles, servingPaddle }, state);
+
+  // We need the updated ball position to see what happens to the
+  // score.
+  const { score, newServingPaddle } = updateScore({ ...state, ball });
+
+  if (newServingPaddle !== null) {
+    // Somebody just scored a point. That overwrites previous
+    // calculations.
+    servingPaddle = newServingPaddle;
+
+    // And we need to recalculate where the ball is based on that.
+    ball = updateBall({ ...state, servingPaddle }, state);
+  }
+
+  state.servingPaddle = servingPaddle;
+  state.paddles = paddles;
+  state.ball = ball;
+  state.score = score;
 }
 
 /**
@@ -344,7 +398,25 @@ function drawPaddle(ctx, paddle) {
 
 /**
  * @param {CanvasRenderingContext2D} ctx
- * @param {{x: number, y: number}} ball
+ * @param {Score} score
+ * @returns {void}
+ */
+function drawScore(ctx, score) {
+  const fontSize = Math.round(ctx.canvas.height / 4);
+  const center = ctx.canvas.width / 2;
+
+  ctx.font = `bold ${fontSize}px sans-serif`;
+  ctx.fillStyle = "lightgray";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "bottom";
+
+  ctx.fillText(`${score[0]}`, center, SCORE_MARGIN + fontSize + 20);
+  ctx.fillText(`${score[1]}`, center, ctx.canvas.height - SCORE_MARGIN);
+}
+
+/**
+ * @param {CanvasRenderingContext2D} ctx
+ * @param {State} state
  * @returns {void}
  */
 function render(ctx, state) {
@@ -353,6 +425,7 @@ function render(ctx, state) {
   ctx.rect(0, 0, ctx.canvas.width, ctx.canvas.height);
   ctx.fill();
 
+  drawScore(ctx, state.score);
   drawBall(ctx, state.ball);
 
   for (const paddle of state.paddles) {
@@ -368,6 +441,11 @@ async function main() {
   }
 
   const ctx = canvas.getContext("2d");
+
+  if (!(ctx instanceof CanvasRenderingContext2D)) {
+    return;
+  }
+
   const inputs = createInputCollector();
   const state = createState(canvas);
 

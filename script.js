@@ -1,4 +1,6 @@
 /**
+ * @typedef { Set<string> } Inputs - The set of keyboard keys which are in the pressed down position at any given moment.
+ *
  * @typedef {{ x: number, y: number }} Pos - Position in x, y coordinates.
  *
  * @typedef {object} Boundaries - The wall, bounding box of the game.
@@ -15,10 +17,13 @@
  * @typedef {object} Paddle
  * @prop {Pos} pos - The x, y coordinate of the paddle.
  *
+ * @typedef {0 | 1 | null} ServingPaddle - Which paddle—if any—is serving the ball
+ *
  * @typedef {object} State
  * @prop {Boundaries} boundaries
  * @prop {Ball} ball
  * @prop {[Paddle, Paddle]} paddles
+ * @prop {ServingPaddle} servingPaddle
  */
 
 const BALL_RADIUS = 7.5;
@@ -29,6 +34,28 @@ const PADDLE_SPEED = 2;
 
 // How far from the edge the paddle is positioned.
 const PADDLE_OFFSET_Y = 20;
+
+const ALLOWED_INPUTS = [" ", "a", "d", "ArrowLeft", "ArrowRight"];
+
+/**
+ * @returns {Inputs}
+ */
+function createInputCollector() {
+  const inputs = new Set();
+
+  window.addEventListener("keydown", (event) => {
+    if (ALLOWED_INPUTS.includes(event.key)) {
+      event.preventDefault();
+      inputs.add(event.key);
+    }
+  });
+
+  window.addEventListener("keyup", (event) => {
+    inputs.delete(event.key);
+  });
+
+  return inputs;
+}
 
 /**
  * Iterate over all the animation frame, yielding ones per frame.
@@ -54,7 +81,7 @@ function createState(canvas) {
     boundaries: { xMin: 0, xMax: canvas.width, yMin: 0, yMax: canvas.height },
 
     ball: {
-      pos: { x: canvas.width / 2, y: canvas.height / 2 },
+      pos: { x: canvas.width / 2, y: PADDLE_OFFSET_Y + PADDLE_HEIGHT / 2 },
       angle: Math.PI / 3,
       speed: 3,
     },
@@ -67,7 +94,67 @@ function createState(canvas) {
         pos: { x: canvas.width / 2, y: canvas.height - PADDLE_OFFSET_Y },
       },
     ],
+
+    servingPaddle: 0,
   };
+}
+
+/**
+ * Update the state of the paddles. The top paddle should move if the `a` or
+ * `d` keys are pressed, similarly if the `←` or `→` (named ArrowLeft and
+ * ArrowRight respectively) are pressed, the bottom paddle should move.
+ *
+ * @param { State } oldState
+ * @param { Inputs } inputs
+ * @returns { [Paddle, Paddle] }
+ */
+function updatePaddles({ paddles: oldPaddles, boundaries }, inputs) {
+  const paddles = structuredClone(oldPaddles);
+
+  const xMin = boundaries.xMin + PADDLE_WIDTH / 2;
+  const xMax = boundaries.xMax - PADDLE_WIDTH / 2;
+
+  if (inputs.has("a")) {
+    paddles[0].pos.x = Math.max(xMin, paddles[0].pos.x - PADDLE_SPEED);
+  }
+
+  if (inputs.has("d")) {
+    paddles[0].pos.x = Math.min(xMax, paddles[0].pos.x + PADDLE_SPEED);
+  }
+
+  if (inputs.has("ArrowLeft")) {
+    paddles[1].pos.x = Math.max(xMin, paddles[1].pos.x - PADDLE_SPEED);
+  }
+
+  if (inputs.has("ArrowRight")) {
+    paddles[1].pos.x = Math.min(xMax, paddles[1].pos.x + PADDLE_SPEED);
+  }
+
+  return paddles;
+}
+
+/**
+ * If the space bar is pressed (`input.has(" ")`) the ball should be
+ * served (released) by whichever paddle is serving. But otherwise
+ * everything is left unchanged.
+ *
+ * @param {State} state
+ * @param {Inputs} inputs
+ * @returns {ServingPaddle}
+ */
+function updateServingPaddle({ servingPaddle: oldServingPaddle }, inputs) {
+  if (oldServingPaddle === null) {
+    // The ball is in active play, there is nothing to change.
+    return null;
+  }
+
+  if (inputs.has(" ")) {
+    // A player pressed the space bar. Let’s release the ball.
+    return null;
+  }
+
+  // The ball shall remain with whomever has it.
+  return oldServingPaddle;
 }
 
 /**
@@ -82,8 +169,55 @@ function updateBall(state) {
   // Basically cos(angle) is how much your x coordinate, changes and sin(angle)
   // is how much your y coordinate changes. Multiply by speed.
 
+  if (state.servingPaddle !== null) {
+    // The ball is in the serve position, It is completely determined by the
+    // position of the paddle.
+    let y = state.paddles[state.servingPaddle].pos.y;
+
+    // Compute the offset, i.e. how much the ball’s center is from the paddle’s
+    // center while still colliding.
+    const offset = PADDLE_HEIGHT / 2 + BALL_RADIUS + 1;
+
+    // Push the ball to the top of the paddle.
+    if (state.servingPaddle === 0) {
+      // Top paddle, in this case it is at a higher y coordinate,
+      // i.e. under it.
+      y += offset;
+    } else {
+      // Bottom paddle, push it upwards, i.e. lower y coordinate.
+      y -= offset;
+    }
+    // We don’t need to see anything else. We can safely return from this
+    // function.
+    return {
+      pos: { x: state.paddles[state.servingPaddle].pos.x, y },
+      speed: 0,
+      angle: 0,
+    };
+  }
+
   // Make a copy of the old ball state to keep our record straight.
   const oldBall = structuredClone(state.ball);
+
+  if (oldBall.speed === 0) {
+    // The ball is not moving, it must have been served in this frame.
+    let angle = 0;
+
+    if (state.servingPaddle === 0) {
+      // Top paddle has it, shoot it downwards (π/2 radians = 90 deg).
+      angle = Math.PI / 2;
+    } else {
+      // -π/2 radians = -90 deg is straight up.
+      angle = -Math.PI / 2;
+    }
+
+    // We have seen everything we need to see. Return early.
+    return {
+      pos: oldBall.pos,
+      speed: BALL_SPEED,
+      angle,
+    };
+  }
 
   // Our new position. This will be updated as needed.
   const pos = {
@@ -161,9 +295,12 @@ function updateBall(state) {
  * react to interactions, collisions, and user inputs.
  *
  * @param {State} state
+ * @param {Inputs} inputs
  * @returns {void}
  */
-function updateState(state) {
+function updateState(state, inputs) {
+  state.servingPaddle = updateServingPaddle(state, inputs);
+  state.paddles = updatePaddles(state, inputs);
   state.ball = updateBall(state);
 }
 
@@ -231,10 +368,11 @@ async function main() {
   }
 
   const ctx = canvas.getContext("2d");
+  const inputs = createInputCollector();
   const state = createState(canvas);
 
   for await (const _frame of animationFrames()) {
-    updateState(state);
+    updateState(state, inputs);
     render(ctx, state);
   }
 }

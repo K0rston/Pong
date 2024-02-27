@@ -12,6 +12,26 @@ import {
   SCORE_MARGIN,
 } from "./globals.js";
 
+const BACKGROUND_COLOR = "lch(85% 50 260)";
+const BALL_COLOR = "lch(85% 50 95)";
+const PADDLE_COLOR = "lch(85% 50 0)";
+
+const LINE_COLOR = "black";
+const LINE_WIDTH = 2;
+
+/**
+ * Paint a background over previous frame.
+ *
+ * @param { CanvasRenderingContext2D } ctx
+ * @returns { void }
+ */
+function clear(ctx) {
+  ctx.fillStyle = BACKGROUND_COLOR;
+  ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+
+  ctx.fill();
+}
+
 /**
  * Draw a simple ball.
  *
@@ -21,11 +41,15 @@ import {
  */
 function drawBall(ctx, ball) {
   ctx.beginPath();
-  ctx.fillStyle = "black";
+
+  ctx.fillStyle = BALL_COLOR;
+  ctx.lineWidth = LINE_WIDTH;
+  ctx.strokeStyle = LINE_COLOR;
 
   ctx.arc(ball.pos.x, ball.pos.y, BALL_RADIUS, 0, 2 * Math.PI);
 
   ctx.fill();
+  ctx.stroke();
 }
 
 /**
@@ -37,7 +61,10 @@ function drawBall(ctx, ball) {
  */
 function drawPaddle(ctx, paddle) {
   ctx.beginPath();
-  ctx.fillStyle = "black";
+
+  ctx.fillStyle = PADDLE_COLOR;
+  ctx.lineWidth = LINE_WIDTH;
+  ctx.strokeStyle = LINE_COLOR;
 
   // We draw it with x and y in its center.
   ctx.rect(
@@ -48,6 +75,7 @@ function drawPaddle(ctx, paddle) {
   );
 
   ctx.fill();
+  ctx.stroke();
 }
 
 /**
@@ -60,7 +88,7 @@ function drawScore(ctx, score) {
   const center = ctx.canvas.width / 2;
 
   ctx.font = `bold ${fontSize}px sans-serif`;
-  ctx.fillStyle = "lightgray";
+  ctx.fillStyle = "lch(100% none none / 0.3)";
   ctx.textAlign = "center";
   ctx.textBaseline = "bottom";
 
@@ -74,11 +102,7 @@ function drawScore(ctx, score) {
  * @returns {void}
  */
 export function render(ctx, state) {
-  // Clear the canvas with a white background
-  ctx.fillStyle = "white";
-  ctx.rect(0, 0, ctx.canvas.width, ctx.canvas.height);
-  ctx.fill();
-
+  clear(ctx);
   drawScore(ctx, state.score);
   drawBall(ctx, state.ball);
 

@@ -3,7 +3,7 @@
  */
 
 // Every allowed user input.
-const ALLOWED_INPUTS = [" ", "a", "d", "ArrowLeft", "ArrowRight"];
+const ALLOWED_INPUTS = [" ", "a", "d", "p", "ArrowLeft", "ArrowRight"];
 
 /**
  * @returns {Inputs}

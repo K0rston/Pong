@@ -2,6 +2,7 @@ import { detectCollisions } from "./collision-detectors.js";
 import { handleCollisions } from "./collision-handlers.js";
 import { createInputCollector } from "./inputs.js";
 import { render } from "./render.js";
+import { playSounds, prepareSound } from "./sound.js";
 import { createState, updateState } from "./state.js";
 
 /**
@@ -19,6 +20,7 @@ async function* animationFrames() {
 
 async function main() {
   const canvas = document.getElementById("game");
+  prepareSound();
 
   if (!(canvas instanceof HTMLCanvasElement)) {
     return;
@@ -40,6 +42,7 @@ async function main() {
     const collisions = detectCollisions(state);
     handleCollisions(collisions, state, oldState);
 
+    playSounds(collisions, state, oldState);
     render(ctx, state);
 
     // Sync the old state for next iteration.

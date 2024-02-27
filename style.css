@@ -5,7 +5,7 @@ body {
 
 body {
   align-items: center;
-  background: skyblue;
+  background: white;
   box-sizing: border-box;
   flex-direction: column;
   display: flex;
@@ -24,7 +24,7 @@ body {
 }
 
 .game {
-  background: white;
+  background: lch(85% 50 260);
   border: 2px solid black;
 }
 

@@ -22,6 +22,7 @@
  * @typedef {[number, number]} Score - Keep track of the score
  *
  * @typedef {object} State
+ * @prop {boolean} isPaused
  * @prop {Boundaries} boundaries
  * @prop {Ball} ball
  * @prop {[Paddle, Paddle]} paddles
@@ -46,6 +47,8 @@ import {
  */
 export function createState(canvas) {
   return {
+    isPaused: false,
+
     // Start a fair game.
     score: [0, 0],
 
@@ -71,6 +74,23 @@ export function createState(canvas) {
     // Top paddle starts,
     servingPaddle: 0,
   };
+}
+
+/**
+ * Mutate the state to enter or leave the pause state.
+ *
+ * @param {State} state
+ * @param {Inputs} inputs
+ */
+function updatePause(state, inputs) {
+  if (inputs.has("p")) {
+    // Toggle the pause state.
+    state.isPaused = !state.isPaused;
+
+    // Drop the key from the inputs to prevent reverting next frame
+    // when key is held.
+    inputs.delete("p");
+  }
 }
 
 /**
@@ -198,9 +218,13 @@ export function updateState(oldState, inputs) {
   // Keep a record of our previous state.
   const state = structuredClone(oldState);
 
-  updateServingPaddle(state, oldState, inputs);
-  updatePaddles(state, oldState, inputs);
-  updateBall(state, oldState);
+  updatePause(state, inputs);
+
+  if (!state.isPaused) {
+    updateServingPaddle(state, oldState, inputs);
+    updatePaddles(state, oldState, inputs);
+    updateBall(state, oldState);
+  }
 
   return state;
 }

@@ -126,7 +126,7 @@ export function playSounds(collisions, state, oldState) {
     }
   }
 
-  if (oldState.servingPaddle !== null && state.servingPaddle === null) {
+  if (oldState.isServing !== null && state.isServing === null) {
     playPaddleServe();
   }
 }

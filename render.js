@@ -1,14 +1,17 @@
 /**
  * @typedef {import("state").Ball} Ball
  * @typedef {import("state").Paddle} Paddle
+ * @typedef {import("state").Powerup} Powerup
+ * @typedef {import("state").Brick} Brick
  * @typedef {import("state").Score} Score
  * @typedef {import("state").State} State
  */
 
 import {
   BALL_RADIUS,
+  BRICK_HEIGHT,
+  BRICK_WIDTH,
   PADDLE_HEIGHT,
-  PADDLE_WIDTH,
   SCORE_MARGIN,
 } from "./globals.js";
 
@@ -53,6 +56,30 @@ function drawBall(ctx, ball) {
 }
 
 /**
+ * Draw a powerup.
+ *
+ * @param {CanvasRenderingContext2D} ctx
+ * @param {import("state").Powerup} powerup
+ * @returns {void}
+ */
+function drawPowerup(ctx, powerup) {
+  if (!powerup.pos) {
+    return;
+  }
+
+  ctx.beginPath();
+
+  ctx.fillStyle = "white";
+  ctx.lineWidth = LINE_WIDTH;
+  ctx.strokeStyle = LINE_COLOR;
+
+  ctx.arc(powerup.pos.x, powerup.pos.y, 2, 0, 2 * Math.PI);
+
+  ctx.fill();
+  ctx.stroke();
+}
+
+/**
  * Draw one paddle.
  *
  * @param {CanvasRenderingContext2D} ctx
@@ -68,10 +95,40 @@ function drawPaddle(ctx, paddle) {
 
   // We draw it with x and y in its center.
   ctx.rect(
-    paddle.pos.x - PADDLE_WIDTH / 2,
+    paddle.pos.x - paddle.width / 2,
     paddle.pos.y - PADDLE_HEIGHT / 2,
-    PADDLE_WIDTH,
-    PADDLE_HEIGHT
+    paddle.width,
+    PADDLE_HEIGHT,
+  );
+
+  ctx.fill();
+  ctx.stroke();
+}
+
+/**
+ * Draw one brick.
+ *
+ * @param {CanvasRenderingContext2D} ctx
+ * @param {Brick} brick
+ * @returns {void}
+ */
+function drawBrick(ctx, brick) {
+  ctx.beginPath();
+
+  if (brick.powerup) {
+    ctx.fillStyle = "red";
+  } else {
+    ctx.fillStyle = "white";
+  }
+
+  ctx.lineWidth = LINE_WIDTH;
+  ctx.strokeStyle = LINE_COLOR;
+
+  ctx.rect(
+    brick.pos.x - BRICK_WIDTH / 2,
+    brick.pos.y - BRICK_HEIGHT / 2,
+    BRICK_WIDTH,
+    BRICK_HEIGHT,
   );
 
   ctx.fill();
@@ -105,8 +162,13 @@ export function render(ctx, state) {
   clear(ctx);
   drawScore(ctx, state.score);
   drawBall(ctx, state.ball);
+  drawPaddle(ctx, state.paddle);
 
-  for (const paddle of state.paddles) {
-    drawPaddle(ctx, paddle);
+  for (const brick of state.bricks) {
+    drawBrick(ctx, brick);
+  }
+
+  for (const powerup of state.powerups) {
+    drawPowerup(ctx, powerup);
   }
 }

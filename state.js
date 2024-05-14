@@ -17,26 +17,45 @@
  *
  * @typedef {object} Paddle
  * @prop {Pos} pos - The x, y coordinate of the paddle.
+ * @prop {number} width - The width of the paddle.
+ * @prop {number} desiredWidth - What the paddle width will become after animation.
  *
- * @typedef {0 | 1 | null} ServingPaddle - Which paddle is serving the ball, if any
+ * @typedef {object} Brick
+ * @prop {Pos} pos - The position of the brick in x, y coordinates.
+ * @prop {Powerup | null} powerup
+ *
+ * @typedef {object} Powerup
+ * @prop {"expander"} type
+ * @prop {boolean} active
+ * @prop {Pos | null} pos
+ * @prop {number} timer
+ *
  * @typedef {[number, number]} Score - Keep track of the score
  *
  * @typedef {object} State
  * @prop {boolean} isPaused
+ * @prop {boolean} isServing
  * @prop {Boundaries} boundaries
  * @prop {Ball} ball
- * @prop {[Paddle, Paddle]} paddles
- * @prop {ServingPaddle} servingPaddle
+ * @prop {Paddle} paddle
+ * @prop {Brick[]} bricks
  * @prop {Score} score
+ * @prop {Powerup[]} powerups
  */
 
+import { randomPowerup } from "./gameplay.js";
 import {
   BALL_RADIUS,
   BALL_SPEED,
+  BRICK_COLS,
+  BRICK_HEIGHT,
+  BRICK_ROWS,
+  BRICK_WIDTH,
   PADDLE_HEIGHT,
   PADDLE_OFFSET_Y,
   PADDLE_SPEED,
   PADDLE_WIDTH,
+  POWERUP_DROP_SPEED,
 } from "./globals.js";
 
 /**
@@ -46,8 +65,23 @@ import {
  * @returns {State}
  */
 export function createState(canvas) {
+  /** @type {Brick[]} */
+  const bricks = [];
+
+  for (let row = 0; row < BRICK_ROWS; row += 1) {
+    const y = 40 + row * (BRICK_HEIGHT + 10);
+
+    for (let col = 0; col < BRICK_COLS; col += 1) {
+      const x = 40 + col * (BRICK_WIDTH + 10);
+      bricks.push({ pos: { x, y }, powerup: randomPowerup() });
+    }
+  }
+
   return {
     isPaused: false,
+
+    // Is the ball stuck to the paddle?
+    isServing: true,
 
     // Start a fair game.
     score: [0, 0],
@@ -61,18 +95,15 @@ export function createState(canvas) {
       speed: 3,
     },
 
-    // Two paddles, one at top, one at bottom.
-    paddles: [
-      {
-        pos: { x: canvas.width / 2, y: PADDLE_OFFSET_Y },
-      },
-      {
-        pos: { x: canvas.width / 2, y: canvas.height - PADDLE_OFFSET_Y },
-      },
-    ],
+    paddle: {
+      pos: { x: canvas.width / 2, y: canvas.height - PADDLE_OFFSET_Y },
+      width: PADDLE_WIDTH,
+      desiredWidth: PADDLE_WIDTH,
+    },
 
-    // Top paddle starts,
-    servingPaddle: 0,
+    bricks,
+
+    powerups: [],
   };
 }
 
@@ -94,33 +125,59 @@ function updatePause(state, inputs) {
 }
 
 /**
- * Mutate the state of the paddles. The top paddle should move if the
- * `a` or `d` keys are pressed, similarly if the `←` or `→` (named
- * ArrowLeft and ArrowRight respectively) are pressed, the bottom
- * paddle should move.
+ * Mutate the state of the paddle. The top paddle should move if the
+ * `←` or `→` (named ArrowLeft and ArrowRight respectively) are
+ * pressed, the bottom paddle should move.
  *
  * @param {State} state
  * @param {State} oldState
  * @param {Inputs} inputs
  */
-function updatePaddles(state, { paddles, boundaries }, inputs) {
-  const xMin = boundaries.xMin + PADDLE_WIDTH / 2;
-  const xMax = boundaries.xMax - PADDLE_WIDTH / 2;
-
-  if (inputs.has("a")) {
-    state.paddles[0].pos.x = Math.max(xMin, paddles[0].pos.x - PADDLE_SPEED);
-  }
-
-  if (inputs.has("d")) {
-    state.paddles[0].pos.x = Math.min(xMax, paddles[0].pos.x + PADDLE_SPEED);
-  }
+function updatePaddle(state, { paddle, boundaries }, inputs) {
+  const xMin = boundaries.xMin + paddle.width / 2;
+  const xMax = boundaries.xMax - paddle.width / 2;
 
   if (inputs.has("ArrowLeft")) {
-    state.paddles[1].pos.x = Math.max(xMin, paddles[1].pos.x - PADDLE_SPEED);
+    state.paddle.pos.x = Math.max(xMin, paddle.pos.x - PADDLE_SPEED);
   }
 
   if (inputs.has("ArrowRight")) {
-    state.paddles[1].pos.x = Math.min(xMax, paddles[1].pos.x + PADDLE_SPEED);
+    state.paddle.pos.x = Math.min(xMax, paddle.pos.x + PADDLE_SPEED);
+  }
+
+  if (state.paddle.width < state.paddle.desiredWidth) {
+    state.paddle.width = Math.min(
+      state.paddle.desiredWidth,
+      state.paddle.width + 1,
+    );
+  } else if (state.paddle.width > state.paddle.desiredWidth) {
+    state.paddle.width = Math.max(
+      state.paddle.desiredWidth,
+      state.paddle.width - 1,
+    );
+  }
+}
+
+/**
+ * @param {State} state
+ */
+function updatePowerups(state) {
+  for (const powerup of state.powerups) {
+    if (powerup.pos) {
+      powerup.pos.y += POWERUP_DROP_SPEED;
+      continue;
+    }
+
+    powerup.timer -= 1;
+
+    if (powerup.timer <= 0) {
+      if (powerup.type === "expander") {
+        state.paddle.desiredWidth -= 10;
+      }
+
+      const index = state.powerups.indexOf(powerup);
+      state.powerups.splice(index, 1);
+    }
   }
 }
 
@@ -133,14 +190,10 @@ function updatePaddles(state, { paddles, boundaries }, inputs) {
  * @param {State} oldState
  * @param {Inputs} inputs
  */
-function updateServingPaddle(
-  state,
-  { servingPaddle: oldServingPaddle },
-  inputs
-) {
-  if (oldServingPaddle !== null && inputs.has(" ")) {
+function updateServingPaddle(state, { isServing: wasServing }, inputs) {
+  if (wasServing && inputs.has(" ")) {
     // A player pressed the space bar. Let’s release the ball.
-    state.servingPaddle = null;
+    state.isServing = false;
   }
 }
 
@@ -150,27 +203,20 @@ function updateServingPaddle(
  * @param {State} state - The current state
  * @param {State} oldState - The previous state
  */
-function updateBall(state, { ball: oldBall, servingPaddle: oldServingPaddle }) {
-  if (state.servingPaddle !== null) {
+function updateBall(state, { ball: oldBall, isServing: wasServing }) {
+  if (state.isServing) {
     // The ball is in the serve position, It is completely determined by the
     // position of the paddle.
-    let y = state.paddles[state.servingPaddle].pos.y;
+    let y = state.paddle.pos.y;
 
     // Compute the offset, i.e. how much the ball’s center is from the paddle’s
     // center while still colliding.
     const offset = PADDLE_HEIGHT / 2 + BALL_RADIUS + 1;
 
-    // Push the ball to the top of the paddle.
-    if (state.servingPaddle === 0) {
-      // Top paddle, in this case it is at a higher y coordinate,
-      // i.e. under it.
-      y += offset;
-    } else {
-      // Bottom paddle, push it upwards, i.e. lower y coordinate.
-      y -= offset;
-    }
+    // Bottom paddle, push it upwards, i.e. lower y coordinate.
+    y -= offset;
 
-    state.ball.pos.x = state.paddles[state.servingPaddle].pos.x;
+    state.ball.pos.x = state.paddle.pos.x;
     state.ball.pos.y = y;
     state.ball.angle = 0;
     state.ball.speed = 0;
@@ -185,13 +231,8 @@ function updateBall(state, { ball: oldBall, servingPaddle: oldServingPaddle }) {
     // The ball is not moving, it must have been served in this frame.
     speed = BALL_SPEED;
 
-    if (oldServingPaddle === 0) {
-      // Top paddle has it, shoot it downwards (π/2 radians = 90 deg).
-      angle = Math.PI / 2;
-    } else {
-      // -π/2 radians = -90 deg is straight up.
-      angle = -Math.PI / 2;
-    }
+    // -π/2 radians = -90 deg is straight up.
+    angle = -Math.PI / 2;
 
     state.ball.angle = angle;
     state.ball.speed = speed;
@@ -222,7 +263,8 @@ export function updateState(oldState, inputs) {
 
   if (!state.isPaused) {
     updateServingPaddle(state, oldState, inputs);
-    updatePaddles(state, oldState, inputs);
+    updatePowerups(state);
+    updatePaddle(state, oldState, inputs);
     updateBall(state, oldState);
   }
 

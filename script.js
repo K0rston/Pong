@@ -20,9 +20,13 @@ async function* animationFrames() {
 
 async function main() {
   const canvas = document.getElementById("game");
+  const debug = document.getElementById("debug");
   prepareSound();
 
-  if (!(canvas instanceof HTMLCanvasElement)) {
+  if (
+    !(canvas instanceof HTMLCanvasElement) ||
+    !(debug instanceof HTMLElement)
+  ) {
     return;
   }
 
@@ -39,7 +43,7 @@ async function main() {
     const state = updateState(oldState, inputs);
 
     // See if we have any collisions.
-    const collisions = detectCollisions(state);
+    const collisions = detectCollisions(state, oldState);
     handleCollisions(collisions, state, oldState);
 
     playSounds(collisions, state, oldState);
@@ -47,6 +51,9 @@ async function main() {
 
     // Sync the old state for next iteration.
     oldState = state;
+
+    // Dumb the debug on the screen
+    debug.textContent = JSON.stringify(state, undefined, 2);
   }
 }
 
